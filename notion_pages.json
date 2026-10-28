@@ -1,0 +1,19 @@
+{
+  "pages": [
+    {
+      "title": "네트워크 기초 & Packet Tracer 실습",
+      "id": "40730005-2f66-8185-8a40-d81875507dfd",
+      "path": "01-network-fundamentals/01-network-basics.md"
+    },
+    {
+      "title": "IPv4 주소와 서브넷 마스크 정리",
+      "id": "40630005-2f66-815a-9458-f782574e8dbc",
+      "path": "01-network-fundamentals/02-ipv4-subnet-mask.md"
+    },
+    {
+      "title": "Packet Tracer 네트워크 구축 및 PC 간 통신 실습",
+      "id": "40630005-2f66-8160-abb8-c6b633382c3b",
+      "path": "02-cisco-packet-tracer/01-pc-to-pc-communication.md"
+    }
+  ]
+}
