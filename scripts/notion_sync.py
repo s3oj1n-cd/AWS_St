@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import time
 from pathlib import Path
 
@@ -15,7 +16,7 @@ HEADERS = {
 }
 
 def request_json(url, params=None):
-    for attempt in range(5):
+    for _ in range(5):
         response = requests.get(url, headers=HEADERS, params=params, timeout=30)
         if response.status_code == 429:
             time.sleep(int(response.headers.get("Retry-After", "2")))
@@ -60,7 +61,7 @@ def get_blocks(block_id):
         cursor = data.get("next_cursor")
     return results
 
-def block_to_markdown(block, depth=0):
+def block_to_markdown(block, depth=0, page_paths=None, output_path=None):
     kind = block.get("type", "")
     data = block.get(kind, {})
     text = inline_text(data.get("rich_text", []))
@@ -69,8 +70,7 @@ def block_to_markdown(block, depth=0):
     if kind == "paragraph":
         return prefix + text if text else ""
     if kind.startswith("heading_"):
-        level = int(kind[-1])
-        return "#" * level + " " + text
+        return "#" * int(kind[-1]) + " " + text
     if kind == "bulleted_list_item":
         return prefix + "- " + text
     if kind == "numbered_list_item":
@@ -103,7 +103,13 @@ def block_to_markdown(block, depth=0):
         name = inline_text(data.get("caption", [])) or "Attached file"
         return f"[{name}]({source})" if source else f"*{name}*"
     if kind == "child_page":
-        return f"### {data.get('title', 'Untitled page')}"
+        title = data.get("title", "Untitled page")
+        child_id = block.get("id", "").replace("-", "")
+        if page_paths and child_id in page_paths and output_path:
+            target = Path(page_paths[child_id])
+            relative = os.path.relpath(target, Path(output_path).parent).replace(os.sep, "/")
+            return f"### [{title}]({relative})"
+        return f"### [{title}](https://www.notion.so/{child_id})"
     if kind == "table_of_contents":
         return ""
     if kind == "table":
@@ -121,23 +127,51 @@ def block_to_markdown(block, depth=0):
         return f"*Embedded database: {data.get('title', 'Untitled')}*"
     if kind == "equation":
         return "$$" + data.get("expression", "") + "$$"
+    if kind == "synced_block":
+        return ""
     return ""
 
-def render_block(block, depth=0):
-    lines = []
-    base = block_to_markdown(block, depth)
-    if base:
-        lines.append(base)
-    if block.get("has_children") and block.get("type") not in ("table",):
-        for child in get_blocks(block["id"]):
-            child_text = render_block(child, depth + (1 if child.get("type") in ("bulleted_list_item", "numbered_list_item", "to_do") else 0))
-            if child_text:
-                lines.append(child_text)
-    return "\n\n".join(lines)
+def render_blocks(blocks, depth=0, page_paths=None, output_path=None, index_mode=False):
+    rendered = []
+    previous_normalized = None
+    skip_child_summary = False
+
+    for block in blocks:
+        kind = block.get("type", "")
+        if index_mode:
+            if kind.startswith("heading_"):
+                skip_child_summary = False
+            elif kind == "child_page":
+                skip_child_summary = True
+            elif skip_child_summary and kind not in ("divider",):
+                # Parent pages should link to child pages, not repeat their summaries.
+                continue
+
+        current = block_to_markdown(block, depth, page_paths, output_path)
+        if current:
+            normalized = re.sub(r"\s+", " ", current).strip()
+            # Suppress only immediately repeated identical blocks; repeated examples elsewhere are preserved.
+            if normalized == previous_normalized:
+                continue
+            rendered.append(current)
+            previous_normalized = normalized
+
+        if block.get("has_children") and kind not in ("table", "synced_block"):
+            children = get_blocks(block["id"])
+            child_depth = depth + (1 if kind in ("bulleted_list_item", "numbered_list_item", "to_do") else 0)
+            nested = render_blocks(children, child_depth, page_paths, output_path, index_mode=False)
+            if nested:
+                rendered.append(nested)
+                previous_normalized = None
+
+    return "\n\n".join(rendered)
 
 def main():
     config = json.loads(Path("notion_pages.json").read_text(encoding="utf-8"))
-    for page in config.get("pages", []):
+    pages = config.get("pages", [])
+    page_paths = {page["id"].replace("-", ""): page["path"] for page in pages}
+
+    for page in pages:
         page_id = page["id"]
         meta = request_json(f"{API_BASE}/pages/{page_id}")
         title_parts = meta.get("properties", {}).get("title", {}).get("title", [])
@@ -147,12 +181,20 @@ def main():
                     title_parts = prop.get("title", [])
                     break
         title = rich_text(title_parts) or page.get("title", "Untitled")
-        body = "\n\n".join(
-            text for block in get_blocks(page_id)
-            if (text := render_block(block))
-        )
         output = Path(page["path"])
         output.parent.mkdir(parents=True, exist_ok=True)
+
+        if page.get("mode") == "index":
+            intro = (
+                "이 문서는 학습 목차입니다. 상세 설명은 각 하위 페이지에서 관리합니다.\n\n"
+            )
+            body = render_blocks(get_blocks(page_id), page_paths=page_paths,
+                                 output_path=output, index_mode=True)
+            body = intro + body
+        else:
+            body = render_blocks(get_blocks(page_id), page_paths=page_paths,
+                                 output_path=output, index_mode=False)
+
         content = f"# {title}\n\n> Synced from Notion. Edit the source page in Notion; this file is generated.\n\n{body}\n"
         output.write_text(content, encoding="utf-8")
         print(f"Synced: {title} -> {output}")
