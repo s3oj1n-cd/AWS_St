@@ -156,7 +156,7 @@ def render_blocks(blocks, depth=0, page_paths=None, output_path=None, index_mode
             rendered.append(current)
             previous_normalized = normalized
 
-        if block.get("has_children") and kind not in ("table", "synced_block"):
+        if block.get("has_children") and kind != "table":
             children = get_blocks(block["id"])
             child_depth = depth + (1 if kind in ("bulleted_list_item", "numbered_list_item", "to_do") else 0)
             nested = render_blocks(children, child_depth, page_paths, output_path, index_mode=False)
