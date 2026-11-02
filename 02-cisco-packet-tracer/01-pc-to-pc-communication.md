@@ -205,7 +205,7 @@ Router에서 `copy running-config startup-config`를 실행하고, Packet Tracer
 
 - 핵심 내용: 여러 Router를 연결하고 정적 경로를 설정해 서로 다른 네트워크 간 통신을 구성한다.
 
-[Host Route 설정](https://app.notion.com/p/409300052f66817d81eafc44fbfb4701)
+[Host Route 설정 실습](https://app.notion.com/p/409300052f66817d81eafc44fbfb4701)
 
 - 핵심 내용: 스위치에 연결된 PC별 ping 결과와 Host Route(/32) 개념을 기록했다. 이미지에서는 PC0 통신은 성공, PC1 통신은 실패로 표시되어 있다.
 
