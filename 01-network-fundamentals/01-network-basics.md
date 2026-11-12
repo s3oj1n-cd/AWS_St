@@ -6,9 +6,131 @@
 
 # 네트워크 기초 학습 허브
 
-이 페이지는 Cisco Packet Tracer를 중심으로 학습한 네트워크 기초 개념과 실습 페이지를 찾아가는 상위 목차다. 각 주제의 자세한 이론은 해당 개념 페이지에, 실제로 수행한 구성과 결과는 각 개념 페이지의 하위 실습 페이지에 정리한다.
+OSI 7계층으로 데이터 전달의 전체 흐름을 이해한 뒤, IPv4 주소와 장비 연결, 정적 라우팅, 서브넷팅과 주소 설계 순서로 학습한다. 각 주제의 자세한 이론은 개념 페이지에, 실제 수행한 설정과 확인 결과는 해당 개념의 하위 페이지에 정리한다.
 
 ## 학습 페이지
+
+### OSI 7계층
+
+### [0. OSI 7계층](https://www.notion.so/416300052f6680d1b70aea466b0da9f2)
+
+## 통신을 계층으로 나누는 이유
+
+OSI(Open Systems Interconnection) 7계층은 네트워크 통신의 역할을 일곱 단계로 나눈 참조 모델이다. 애플리케이션에서 만든 데이터가 전송되고 상대 장비에서 해석되는 과정을 계층별로 설명하며, 통신 문제를 어느 단계에서 확인할지 판단하는 기준이 된다.
+
+## OSI 7계층과 데이터 단위
+
+위쪽은 애플리케이션의 통신 기능, 아래쪽은 데이터를 실제 네트워크로 전달하는 기능을 담당한다. PDU(Protocol Data Unit)는 각 계층에서 다루는 데이터 단위다.
+
+| 계층 | 주요 역할 | PDU | 연결해서 볼 예시 |
+| --- | --- | --- | --- |
+| L7 응용 · Application | 애플리케이션에 네트워크 서비스를 제공 | Data | HTTP, FTP, Telnet, SSH, DNS |
+| L6 표현 · Presentation | 데이터 형식 변환, 인코딩·디코딩, 암호화·복호화 | Data | 문자 인코딩, 데이터 표현, TLS의 암호화 기능 |
+| L5 세션 · Session | 통신 세션 설정·유지·종료와 대화 관리 | Data | RPC·NetBIOS의 세션 관련 기능 |
+| L4 전송 · Transport | 프로세스 간 전달, 데이터 분할·재조합, 프로토콜에 따른 흐름·오류 제어 | TCP Segment / UDP Datagram | TCP, UDP, 포트 번호 |
+| L3 네트워크 · Network | IP 주소를 이용한 패킷 전달과 라우팅 | Packet | IP, ICMP, IGMP |
+| L2 데이터 링크 · Data Link | 같은 링크의 장비 간 프레임 전달, MAC 주소 처리, 오류 검출 | Frame | Ethernet, PPP, HDLC |
+| L1 물리 · Physical | 비트열을 전기·광·무선 신호로 전송 | Bits / Signal | 케이블, 커넥터, 전기·광·무선 신호 |
+
+표의 상위 계층 예시는 기능을 이해하기 위한 대응이다. 실제 TCP/IP에서는 L5~L7의 기능을 응용 계층에서 함께 구현한다. [Cisco TCP/IP와 OSI 개요](https://www.cisco.com/c/en/us/support/docs/ip/routing-information-protocol-rip/13769-5.pdf)
+
+## TCP/IP 4계층과의 대응
+
+| OSI 계층 | TCP/IP 4계층 |
+| --- | --- |
+| L7 응용 + L6 표현 + L5 세션 | Application · 응용 |
+| L4 전송 | Transport · 전송 |
+| L3 네트워크 | Internet · 인터넷 |
+| L2 데이터 링크 + L1 물리 | Network Access · 네트워크 접근 |
+
+## 데이터가 전달되는 순서
+
+송신 호스트에서는 데이터가 **L7 → L1** 방향으로 내려간다. 전송 계층이 TCP·UDP 헤더를, 네트워크 계층이 IP 헤더를, 데이터 링크 계층이 링크 헤더와 필요한 트레일러를 붙이는 과정을 **캡슐화**라고 한다. 수신 호스트에서는 **L1 → L7** 방향으로 올라가며 해당 정보를 해석하고 제거하는 **역캡슐화**를 거친다. [Cisco 프로토콜 스택과 캡슐화](https://www.cisco.com/E-Learning/bulk/public/tac/cim/cib/using_cisco_ios_software/linked/tcpip.htm)
+
+| 단계 | 데이터 형태 | 식별에 사용하는 정보 |
+| --- | --- | --- |
+| 애플리케이션 데이터 | Data | 서비스의 요청·응답 내용 |
+| 전송 계층 처리 | TCP Segment / UDP Datagram | 출발지·목적지 포트 |
+| 네트워크 계층 처리 | IP Packet | 출발지·목적지 IP |
+| 링크 계층 처리 | Frame | Ethernet의 출발지·목적지 MAC |
+| 물리 매체 전송 | 비트열을 나타내는 신호 | 매체의 신호 규칙 |
+
+서로 다른 네트워크로 보낼 때는 다음 홉의 MAC 주소로 프레임을 만든다. 라우터는 목적지 IP로 다음 홉을 선택하고, 나가는 링크에 맞는 새 프레임으로 패킷을 전달한다.
+
+## L4 — TCP·UDP와 포트
+
+| 항목 | TCP | UDP |
+| --- | --- | --- |
+| 전달 특성 | 연결을 맺고 순서 있는 바이트 스트림을 신뢰성 있게 전달 | 데이터그램 단위로 전달 |
+| 전송 제어 | 확인 응답, 재전송, 순서 관리, 흐름 제어 | UDP 자체는 수신 확인·재전송·순서 보장을 제공하지 않음 |
+| 연결 시작 | SYN → SYN+ACK → ACK의 3-way handshake | TCP와 같은 연결 설정 절차가 없음 |
+| PDU | Segment | Datagram |
+
+TCP는 신뢰성과 순서 보장을 제공하고, UDP는 전송 계층의 처리 절차가 단순하다. 전송 속도는 지연·손실·애플리케이션 구현의 영향을 함께 받는다. [TCP · RFC 9293](https://www.rfc-editor.org/rfc/rfc9293.html) · [UDP · RFC 768](https://www.rfc-editor.org/rfc/rfc768.html)
+
+TCP·UDP의 포트 필드는 각각 16비트로 `0`~`65535`를 표현한다. TCP와 UDP의 포트 번호 공간은 각각 관리된다. 다음은 IANA의 포트 분류이며, 포트 `0`은 예약돼 있다.
+
+| 범위 | 분류 | 학습 예 |
+| --- | --- | --- |
+| 0~1023 | Well-Known / System | HTTP 80, HTTPS 443 |
+| 1024~49151 | Registered / User | MySQL 3306 |
+| 49152~65535 | Dynamic / Private | 클라이언트 임시 포트에 활용. 실제 사용 범위는 OS 설정에 따름 |
+
+### 주요 서비스와 기본 포트
+
+| 서비스 | 대표 전송 방식 | 포트·용도 |
+| --- | --- | --- |
+| FTP | TCP | 21 제어 연결, 20은 Active FTP의 서버 측 데이터 포트 |
+| SSH / Telnet | TCP | 22 / 23 |
+| SMTP / POP3 / IMAP | TCP | 25 / 110 / 143 |
+| HTTP | TCP | 80 |
+| HTTPS | TCP | 443 |
+| DNS | UDP와 TCP | 53 |
+| TFTP | UDP | 69, 초기 요청 |
+| DHCPv4 | UDP | 서버 67, 클라이언트 68 |
+| SNMP | 일반적으로 UDP | 161 질의·응답, 162 알림 |
+
+DNS는 TCP와 UDP 모두 사용한다. HTTPS의 대표 포트는 `443`이며, HTTP/3는 UDP 위의 QUIC을 사용한다. [IANA 서비스·포트 등록부](https://www.iana.org/assignments/service-names-port-numbers/service-names-port-numbers.xhtml) · [DNS · RFC 1035](https://www.rfc-editor.org/rfc/rfc1035.html) · [HTTP/3 · RFC 9114](https://www.rfc-editor.org/rfc/rfc9114.html)
+
+## L3 — IPv4·ICMP·IGMP
+
+IPv4 주소는 32비트다. 메모에서 배운 클래스 기준은 첫 옥텟으로 A의 일반 유니캐스트 범위 `1`~`126`(`/8`), B `128`~`191`(`/16`), C `192`~`223`(`/24`), 멀티캐스트용 D `224`~`239`로 정리한다. 현재 주소 설계와 라우팅에서는 프리픽스 길이를 명시하는 CIDR을 사용한다.
+
+전송 계층의 데이터 분할과 IPv4의 단편화는 각각 전송 데이터와 IP 패킷을 다루는 기능이다. IPv4 헤더의 Protocol 필드는 상위 프로토콜을 식별하며, 헤더 체크섬은 IPv4 헤더의 오류를 검출한다. [IPv4 · RFC 791](https://www.rfc-editor.org/rfc/rfc791.html)
+
+- **IGMP** — IPv4 멀티캐스트 그룹의 가입 상태를 호스트와 인접 멀티캐스트 라우터 사이에서 관리한다.
+
+- **ICMP** — IP 전달 과정의 오류나 상태를 알린다. `ping`은 Echo 메시지를, 경로 추적은 TTL과 ICMP 응답을 활용한다.
+
+| ICMPv4 Type | 이름 | 의미 |
+| --- | --- | --- |
+| 8 | Echo Request | ping 요청 |
+| 0 | Echo Reply | ping 응답 |
+| 3 | Destination Unreachable | 목적지 도달 불가 |
+| 11 | Time Exceeded | TTL 만료 등의 시간 초과 |
+
+[ICMPv4 · RFC 792](https://www.rfc-editor.org/rfc/rfc792.html)
+
+## IP와 MAC을 연결하는 ARP·RARP
+
+**ARP**는 같은 링크에서 IPv4 주소에 대응하는 MAC 주소를 알아내는 데 사용한다. 목적지가 다른 네트워크에 있으면 ARP로 기본 게이트웨이 등 다음 홉의 MAC 주소를 구한다. Ethernet의 ARP 메시지는 Ethernet 프레임에 직접 실리며 IP 주소와 링크 주소를 연결한다. [ARP · RFC 826](https://www.rfc-editor.org/rfc/rfc826.html)
+
+**RARP**는 자신의 하드웨어 주소를 아는 장비가 서버에 자신의 프로토콜 주소를 문의하던 방식이다. DHCP는 IP·마스크·게이트웨이·DNS 같은 설정을 임대하는 별도의 프로토콜이다. [RARP · RFC 903](https://www.rfc-editor.org/rfc/rfc903.html)
+
+## L2·L1 — MAC 주소와 장비 역할
+
+Ethernet MAC 주소는 48비트이며 `34-5A-60-A3-6F-C2`처럼 16진수 여섯 옥텟으로 표현한다. OUI 기반의 전역 관리 주소는 앞 24비트가 조직 식별자, 나머지 24비트가 해당 조직의 할당 영역이다. 로컬 관리 주소도 사용된다. [IEEE EUI·OUI 가이드](https://standards.ieee.org/wp-content/uploads/import/documents/tutorials/eui.pdf)
+
+| 중심 계층 | 대표 장비 | 전달 시 다루는 정보 |
+| --- | --- | --- |
+| L1 | Hub, Repeater, 전송 매체 | 비트와 신호 |
+| L2 | L2 Switch, Bridge | 프레임의 MAC 주소 |
+| L3 | Router, L3 Switch | 패킷의 IP 주소와 라우팅 정보 |
+| L4 | L4 Switch / 로드밸런서 | TCP·UDP 포트 등 전송 계층 정보 |
+
+네트워크 통신을 볼 때 **포트 → IP → MAC → 신호**의 순서로 역할을 연결한다. 이어지는 IPv4 주소 페이지에서 네트워크·호스트 구분을 배우고, 장비 연결과 라우팅에서 패킷이 실제로 이동하는 경로를 확인한다.
+
+학습 기록은 [OSI 7계층 메모](https://chatgpt.com/library?file_id=libfile_c22e8213a460819187b11628db295339&account_id=personal)를 바탕으로 정리했다.
 
 ### IPv4 주소 기초와 주소 유형
 
@@ -1933,7 +2055,9 @@ traceroute 192.168.20.1
 
 ## 학습
 
-- 먼저 IPv4 주소와 주소 유형을 이해한다.
+- OSI 7계층과 TCP/IP 모델로 통신의 전체 흐름을 살펴보고, 포트·IP·MAC·신호가 담당하는 역할을 연결한다.
+
+- IPv4 주소와 주소 유형을 이해하고 같은 네트워크와 다른 네트워크를 구분한다.
 
 - Hub·Switch를 이용한 같은 네트워크 통신에서 시작해 Router와 기본 게이트웨이를 이용한 서로 다른 네트워크 통신으로 확장한다.
 
